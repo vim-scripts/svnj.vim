@@ -2,8 +2,8 @@ This is a mirror of http://www.vim.org/scripts/script.php?script_id=4888
 
 VIM (VIM 7 and up) plugin for subversion (svn)
 
-Visit https://github.com/juneedahamed/svnj.vim
- for screen shots and recent updates
+Repo :    https://github.com/juneedahamed/svnj.vim
+
 screenshots  :  
               http://i.imgur.com/I69Mny2.png
               http://i.imgur.com/oY6E2kP.png
@@ -14,16 +14,41 @@ Supported OS
 MacOSX/Linux
 
 Supported operations
-    svn log
-    svn status
-    svn diff
-    svn blame
-    svn list
+     svn log, status, diff, blame, list
 
-lists all branches or trunk
-Optional settings when available will provide menu's to navigate available branches/trunk
-    At .vimrc add let g:svnj_branch_url = svn://127.0.0.1/Path/until/trunk
-    At .vimrc add let g:svnj_branch_url = svn://127.0.0.1/Path/until/branches
+Features
+
+     1. SVNLog
+         Get the revisions of file in buffer. With the list of revisions from the output.
+          - open/diff required file revision 
+          - mark required revision to open/diff
+          - list trunk
+          - list branches
+          - diff/open files across branches/trunk
+
+      2. SVNStatus
+          Get the output of svn st. With the listed files
+          - open any/all files
+          - mark required files to open
+           - pass q/u option to svn st
+           - global option to ignore files
+
+       3. SVNComitts
+            Get the list of files checked in across project revision. This command lists the output of svn log of the project directory.  
+            - list HEAD/PREV
+           - mark revisions for comparing across marked revisions 
+           - open any/all/marked files listed
+          
+      4. SVNDiff
+         Immediate diff the file in buffer with the previous revision
+         For diff with selected revision use SVNLog
+
+
+Lists all branches or trunk
+    Optional settings when available will provide menu's to navigate available branches/trunk
+    At .vimrc add 
+                   let g:svnj_trunk_url = "svn://127.0.0.1/Path/until/trunk&quot; 
+                   let g:svnj_branch_url = "svn://127.0.0.1/Path/until/branches&quot; 
 
     For more info run :help svnj-options
 
@@ -36,3 +61,6 @@ Basic Usage:
     :SVNCommits
     :SVNList
     :help svn
+
+Please refer to wiki link for more options available or after install help svnj-options
+
