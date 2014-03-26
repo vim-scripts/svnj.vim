@@ -6,21 +6,35 @@
 " Credits:      strip expresion from DrAI(StackOverflow.com user)
 " =============================================================================
 
+"autoload/svnj.vim {{{1
 
+"global setting {{{2
 if ! exists('g:svnj_max_logs')
     let g:svnj_max_logs = 10
+endif
+
+if ! exists('g:svnj_max_diff')
+    let g:svnj_max_diff = 2
 endif
 
 if ! exists('g:svnj_find_files')
     let g:svnj_find_files = 1
 endif
 
-if ! exists('g:svnj_branch_url_extend') 
-    let g:svnj_branch_url_extend = {}
+if ! exists('g:svnj_max_open_files')
+    let g:svnj_max_open_files = 10
 endif
 
-if type(g:svnj_branch_url_extend) != type({})
-    let g:svnj_branch_url_extend = {}
+if ! exists('g:svnj_fuzzy_search')
+    let g:svnj_fuzzy_search = 1
+elseif type(eval('g:svnj_fuzzy_search')) != type(0)
+    let g:svnj_fuzzy_search = 1
+endif
+
+if ! exists('g:svnj_fuzzy_search_result_max')
+    let g:svnj_fuzzy_search_result_max = 50
+elseif type(eval('g:svnj_fuzzy_search_result_max')) != type(0)
+    let g:svnj_fuzzy_search_result_max = 50
 endif
 
 let [s:menustart, s:menuend] = ['>>>', '<<<']
@@ -47,16 +61,17 @@ let s:svnj_branch_url = s:initPathVariables('g:svnj_branch_url')
 let s:svnj_trunk_url = s:initPathVariables('g:svnj_trunk_url')
 let s:svnj_wcrp = s:initPathVariables('g:svnj_working_copy_root_path')
 
-let s:svnj_ignore_files = ['.pyc', '.bin', '.egg', '.so', '*.rpd']
+let s:svnj_ignore_files = ['.pyc', '.bin', '.egg', '.so', '.rpd', '.git']
 if exists('g:svnj_ignore_files') && type(g:svnj_ignore_files) == type([])
     for ig in g:svnj_ignore_files
         call add(s:svnj_ignore_files, ig)
     endfor
 endif
 
-let s:svnj_ignore_files_pat = '\v('. join(s:svnj_ignore_files, '|') .')$'
+let s:svnj_ignore_files_pat = '\v('. join(s:svnj_ignore_files, '|') .')'
+"2}}}
 
-" The main dict svnd structure "{{{
+"The main dict svnd structure reference {{{2
 "
 "svnd = {
 "           idx     : 0
@@ -116,70 +131,72 @@ let s:svnj_ignore_files_pat = '\v('. join(s:svnj_ignore_files, '|') .')$'
 "errd = { descr : str , msg: str, line :str }
 "
 "
-""}}}
+"2}}}
 
-"Key mappings for all ops"{{{1
+"Key mappings for all ops {{{2
 
 let [s:selectkey, s:selectdscr] = ["\<C-Space>", 'C-space:Mark']
 if !has('gui_running')
     let [s:selectkey, s:selectdscr] = ["\<C-l>", 'C-l:Mark']
 endif
 
-"Key mappings for svn log output logops"{{{2
+"Key mappings for svn log output logops {{{3
 let s:logops = {
-            \ "\<Enter>"   : {'callback':'svnj#diffCurFile', 'descr': 'Ent:Diff'},
+            \ "\<Enter>"   : {'callback':'svnj#diffFiles', 'descr': 'Ent:Diff'},
+            \ "\<C-Enter>" : {'callback':'svnj#openRevNoSplit', 'descr':'C-Enter:NoSplit'},
             \ "\<C-o>"     : {'callback':'svnj#openRevisionFile', 'descr':'C-o:Open'},
-            \ "\<C-w>"     : {'callback':'svnj#toggleWrap', 'descr':'C-w:tooglewrap'},
+            \ "\<C-w>"     : {'callback':'svnj#toggleWrap', 'descr':'C-w:wrap!'},
             \ s:selectkey  : {'callback':'svnj#handleLogSelect', 'descr': s:selectdscr},
             \ }
-"end "2}}}
+"3}}}
 
-"Key mappings for svn status output statusops"{{{2
+"Key mappings for svn status output statusops {{{3
 let s:statusops = {
-            \ "\<Enter>"  : {'callback':'svnj#openStatusFile', 'descr': 'Ent:Open'},
-            \ "\<C-o>"    : {'callback':'svnj#openStatusFiles', 'descr': 'C-o:OpenAll'},
-            \ "\<C-Enter>": {'callback':'svnj#openSelected', 'descr':'C-Ent:OpenSelected'},
-            \ "\<C-w>"    : {'callback':'svnj#toggleWrap', 'descr':'C-w:tooglewrap'},
+            \ "\<Enter>"  : {'callback':'svnj#openStatusFiles', 'descr': 'Ent:Open'},
+            \ "\<C-o>"    : {'callback':'svnj#openAllStatusFiles', 'descr': 'C-o:OpenAll'},
+            \ "\<C-w>"    : {'callback':'svnj#toggleWrap', 'descr':'C-w:wrap!'},
             \ s:selectkey : {'callback':'svnj#handleStatusSelect', 'descr': s:selectdscr},
             \ }
-"end "2}}}
-"
-"Key mappings for svn list output listops"{{{2
+"3}}}
+
+"Key mappings for svn list output listops {{{3
 let s:listops = {
-            \ "\<Enter>"  : {'callback':'svnj#openListFile', 'descr': 'Ent:Open'},
-            \ "\<C-o>"    : {'callback':'svnj#openListFiles', 'descr': 'C-o:OpenAll'},
-            \ "\<C-Enter>": {'callback':'svnj#openSelected', 'descr':'C-Ent:OpenSelected'},
+            \ "\<Enter>"  : {'callback':'svnj#openListFiles', 'descr': 'Ent:Open'},
+            \ "\<C-o>"    : {'callback':'svnj#openAllListedFiles', 'descr': 'C-o:OpenAll'},
             \ s:selectkey : {'callback':'svnj#handleListSelect', 'descr': s:selectdscr},
             \ }
-"end "2}}}
+"3}}}
 
-"Key mappings for svn log output on branch/trunk commitsop"{{{2
+"Key mappings for svn log output on branch/trunk commitsop {{{3
 let s:commitops = {
             \ "\<Enter>"  : {'callback':'svnj#showCommitsHEAD', 'descr': 'Ent:HEAD'},
             \ "\<C-p>"    : {'callback':'svnj#showCommitsPREV', 'descr':'C-p:PREV'},
-            \ "\<C-w>"    : {'callback':'svnj#toggleWrap', 'descr':'C-w:tooglewrap'},
+            \ "\<C-w>"    : {'callback':'svnj#toggleWrap', 'descr':'C-w:wrap!'},
             \ s:selectkey : {'callback':'svnj#handleCommitsSelect', 'descr': s:selectdscr},
             \ }
-"end "2}}}
+"3}}}
 
-"Key mappings for flist"{{{2
+"Key mappings for flist {{{3
 let s:flistops = {
             \ "\<Enter>"  : {'callback':'svnj#flistSelected', 'descr': 'Ent:SELECT'},
             \ }
-"end "2}}}
+"3}}}
 
 
-"Key mappings for svn menus, list trunks, list branches etc.,  menuops
+"Key mappings for svn menus, list trunks, list branches etc.,  menuops {{{3
+
 let s:menuops = { "\<Enter>"  : {'callback':'svnj#handleMenuOps', 'descr': 'Enter:Open'}, }
 
-"end Key mappins for all ops"1}}}
+"3}}}
 
 "Default empty dir for each operations with mandatory keys  entryd
 let s:entryd = {'contents':{}, 'ops':{}}
 
 let [s:logkey, s:statuskey, s:commitskey, s:listkey, s:flistkey,  s:menukey] = [
             \ 'logd', 'statusd', 'commitsd', 'listd', 'flistd', 'menud']
+"2}}}
 
+"The svnd dict {{{2
 let s:svnd = {}
 fun! s:svnd.New(...) dict
     let obj = copy(self)
@@ -256,12 +273,17 @@ fun! s:filterMe(val, fltr)
     return a:val =~? a:fltr
 endf
 
+"2}}}
+
+"Highlight/setup {{{2
 fun! svnj#setup()
     exec s:errsyntax | exec  s:menusyntax
     exec 'hi link SVNError' . ' Error '
     exec 'hi link SVNMenu' . ' MoreMsg '
 endf
+"2}}}
 
+"SVNDiff {{{2
 fun! svnj#SVNDiff()
     try
         let url = s:svnURL(s:getBufferFileAbsPath())
@@ -272,7 +294,9 @@ fun! svnj#SVNDiff()
     endtry
     unlet! svnd
 endf
+"2}}}
 
+"SVNBlame {{{2
 fun! svnj#SVNBlame()
     try
         call winj#blame('', s:getBufferFileAbsPath())
@@ -282,7 +306,9 @@ fun! svnj#SVNBlame()
     endtry
     unlet! svnd
 endf
+"2}}}
 
+"SVNCommits {{{2
 fun! svnj#SVNCommits()
     let svnd = s:svnd.New('SVNCommits', {s:commitskey : deepcopy(s:entryd)})
     try
@@ -298,7 +324,9 @@ fun! svnj#SVNCommits()
     call winj#populateJWindow(svnd)
     unlet! svnd
 endf
+"2}}}
 
+"SVNLog {{{2
 fun! svnj#SVNLog()
     let svnd = s:svnd.New('SVNLog', {s:logkey : deepcopy(s:entryd)})
     try
@@ -313,7 +341,9 @@ fun! svnj#SVNLog()
     call winj#populateJWindow(svnd)
     unlet! svnd
 endf
+"2}}}
 
+"SVNStatus {{{2
 fun! svnj#SVNStatus(...)
     let svnd = s:svnd.New('SVNStatus', {s:statuskey : deepcopy(s:entryd)})
     try
@@ -337,42 +367,27 @@ fun! svnj#SVNStatus(...)
     call winj#populateJWindow(svnd)
     unlet! svnd
 endf
+"2}}}
 
+"SVNList {{{2
 fun! svnj#SVNList(...)
-    let svnd = s:svnd.New('SVNList', {s:listkey : deepcopy(s:entryd)})
-    try
-        let thedir = a:0 > 0 ? a:1 : getcwd()
-        let svnd.meta = s:getMeta(thedir)
-        let svncmd = 'svn list --non-interactive ' . thedir
-        let listentries = s:svnList(svncmd) 
-        if empty(listentries)
-            let svnd = s:addErr(svnd, "No files listed for ", svnd.meta.workingrootdir)
-        else
-            call svnd.addContents(s:listkey, listentries, s:listops)
-        endif
-    catch
-        let svnd = s:addErr(svnd, 'Failed ', v:exception)
-    endtry
-    call winj#populateJWindow(svnd)
-    unlet! svnd
+    let thedir = a:0 > 0 ? a:1 : getcwd()
+    let svncmd = 'svn list --non-interactive ' . thedir
+    call s:svnLists(svncmd, thedir, 0)
 endf
+"2}}}
 
-fun! s:svnList(svncmd)
-    let shellout = s:execShellCmd(a:svncmd)
-    let shelloutlist = split(shellout, '\n')
-    let listentries = []
-    for line in  shelloutlist
-        if len(matchstr(line, s:svnj_ignore_files_pat)) != 0
-            continue
-        endif
-        let listentryd = {}
-        let listentryd.line = line
-        let listdict = {}
-        call add(listentries, listentryd)
-    endfor
-    return listentries
+"SVNListRec {{{2
+fun! svnj#SVNListRec(...)
+    let thedir = a:0 > 0 ? a:1 : getcwd()
+    let svncmd = 'svn list --non-interactive -R ' . thedir
+    echohl Question | echo "" | echon "Please wait, Listing files  : " 
+                \ |  echohl None  | echon svncmd
+    call s:svnLists(svncmd, thedir, 1)
 endf
+"2}}}
 
+"svnSummary {{{2
 fun! s:svnSummary(svncmd, meta)
     let shellout = s:execShellCmd(a:svncmd)
     let shelloutlist = split(shellout, '\n')
@@ -390,7 +405,9 @@ fun! s:svnSummary(svncmd, meta)
     endfor
     return statuslist
 endf
+"2}}}
 
+"SVNStatus helpers {{{2
 fun! s:argsSVNStatus(choice, cwd)
     let quiet = 0
     let the_up = 0
@@ -418,24 +435,47 @@ fun! s:argsSVNStatus(choice, cwd)
     return svncmd
 endf
 
-fun! svnj#openListFiles(svnd, key)
-    for key in keys(a:svnd.listd.contents)
-        call winj#openGivenFile(a:svnd.listd.contents[key].line)
+fun! svnj#openAllStatusFiles(svnd, key)
+    let cnt = 0
+    for key in keys(a:svnd.statusd.contents)
+        if cnt == g:svnj_max_open_files
+            break
+        endif
+        let cnt = cnt + 1
+        call winj#openGivenFile(a:svnd.statusd.contents[key].filepath)
     endfor
-endf
-
-fun! svnj#openListFile(svnd, key)
-    return winj#openGivenFile(a:svnd.listd.contents[a:key].line)
+    call s:errorNoFiles(cnt)
 endf
 
 fun! svnj#openStatusFiles(svnd, key)
-    for key in keys(a:svnd.statusd.contents)
-        call winj#openGivenFile(a:svnd.statusd.contents[key].filepath)
-    endfor
-endf
+    if !has_key(a:svnd.selectd, a:key.':')
+        let a:svnd.selectd[a:key. ':'] = a:svnd.statusd.contents[a:key].filepath
+    endif
 
-fun! svnj#openStatusFile(svnd, key)
-    return winj#openGivenFile(a:svnd.statusd.contents[a:key].filepath)
+    let cnt = 0
+    for [thekey, filepath] in items(a:svnd.selectd)
+        if cnt == g:svnj_max_open_files
+            break
+        endif
+        let cnt = cnt + 1
+        call winj#openGivenFile(filepath)
+    endfor
+    call s:errorNoFiles(cnt)
+endf
+"2}}}
+
+"SVNLog helpers {{{2
+fun! svnj#diffFiles(svnd, key)
+    let revision = a:svnd.logd.contents[a:key].revision
+    let a:svnd.selectd[revision] = a:svnd.meta.url
+    let cnt = 0
+    for [revision, url] in items(a:svnd.selectd)
+        let cnt = cnt + 1
+        call winj#diffCurFileWith(revision,url)
+        if cnt == g:svnj_max_diff
+            break
+        endif
+    endfor
 endf
 
 fun! svnj#diffCurFile(svnd, key)
@@ -443,22 +483,25 @@ fun! svnj#diffCurFile(svnd, key)
     return winj#diffCurFileWith(revision, a:svnd.meta.url)
 endf
 
-fun! svnj#openRevisionFile(svnd, key)
+fun! svnj#openRevNoSplit(svnd, key)
     let revision = a:svnd.logd.contents[a:key].revision
-    return winj#openFile(revision, a:svnd.meta.url)
-endf
-
-fun! svnj#openSelected(svnd, key)
-    for [thekey, filepath] in items(a:svnd.selectd)
-        call winj#openGivenFile(filepath)
+    let a:svnd.selectd[revision] = a:svnd.meta.url
+    for [revision, url] in items(a:svnd.selectd)
+        call winj#openFileRevision(revision, url)
     endfor
 endf
 
-fun! svnj#toggleWrap(svnd, key)
-    setl wrap!
-    return 2
+fun! svnj#openRevisionFile(svnd, key)
+    let revision = a:svnd.logd.contents[a:key].revision
+    let a:svnd.selectd[revision] = a:svnd.meta.url
+    "return winj#openFile(revision, a:svnd.meta.url)
+    for [revision, url] in items(a:svnd.selectd)
+        call winj#openFile(revision, url)
+    endfor
 endf
+"2}}}
 
+"handle Select/Mark {{{2
 fun! svnj#handleCommitsSelect(svnd, key)
     let revision = a:svnd.commitsd.contents[a:key].revision
     if has_key(a:svnd.selectd, revision)
@@ -500,7 +543,7 @@ fun! svnj#handleLogSelect(svnd, key)
         return 1
     endif
 
-    if len(a:svnd.selectd) < 1
+    if len(a:svnd.selectd) < 10
         let a:svnd.selectd[revision] = a:svnd.meta.url
         return 1
     else
@@ -514,34 +557,82 @@ endf
 fun! svnj#handleMenuOps(svnd, key)
     return call(a:svnd.menud.contents[a:key].callback, [a:svnd, a:key])
 endf
+"2}}}
 
-fun! svnj#listFilesFrom(svnd, key)
-    let svnd = s:svnd.New('SVNLog', {s:logkey : deepcopy(s:entryd)})
-    let svnd.meta = a:svnd.meta
-    let fileurl = ''
+"SVNList helpers {{{2
+fun! s:svnLists(svncmd, thedir, ignore_dirs)
     try
-        let contents = a:svnd.menud.contents[a:key]
-        if contents.convert ==# 'branch2branch'
-            let fileurl = s:svnBranchURLFromBranch(a:svnd.meta.url, contents.title)
-        elseif contents.convert ==# 'branch2trunk'
-            let fileurl = s:svnTrunkURLFromBranchURL(a:svnd.meta.url)
-        elseif contents.convert ==# 'trunk2branch'
-            let fileurl = s:svnBranchURLFromTrunk(a:svnd.meta.url, contents.title)
+        let svnd = s:svnd.New('SVNList', {s:listkey : deepcopy(s:entryd)})
+        let svnd.meta = s:getMeta(a:thedir)
+        let listentries = s:svnList(a:svncmd, a:thedir, a:ignore_dirs) 
+        if empty(listentries)
+            let svnd = s:addErr(svnd, "No files listed for ", svnd.meta.workingrootdir)
+        else
+            call svnd.addContents(s:listkey, listentries, s:listops)
         endif
-
-        let fileurl = s:validateSVNURLInteractive(fileurl)
-        let svnd.meta.url = fileurl
-        let svnd.title = fileurl
-        call svnd.addContents(s:logkey, s:svnLogs(svnd.meta.url), s:logops)
     catch
-        echo v:exception
-        let svnd = s:addErr(svnd, 'Failed to construct svn url',
-                    \ ' OR File does not exist' )
+        let svnd = s:addErr(svnd, 'Failed ', v:exception)
     endtry
     call winj#populateJWindow(svnd)
     unlet! svnd
 endf
 
+fun! s:svnList(svncmd, thedir, ignore_dirs)
+    let shellout = s:execShellCmd(a:svncmd)
+    "let thedir = len(a:thedir) == 0 ? "." : a:thedir
+    "let shellout = globpath(thedir , "**/*")
+    let shelloutlist = split(shellout, '\n')
+    let listentries = []
+    for line in  shelloutlist
+        if len(matchstr(line, s:svnj_ignore_files_pat)) != 0
+            continue
+        endif
+        if a:ignore_dirs == 1 && isdirectory(line)
+                continue
+        endif
+        let listentryd = {}
+        let listentryd.line = line
+        let listdict = {}
+        call add(listentries, listentryd)
+    endfor
+    return listentries
+endf
+
+fun! svnj#openAllListedFiles(svnd, key)
+    let cnt = 0
+    for key in keys(a:svnd.listd.contents)
+        let filepath = a:svnd.listd.contents[key].line
+        let abspath = a:svnd.meta.filepath != "" ? 
+                    \ a:svnd.meta.filepath . "/". filepath : filepath
+        if cnt == g:svnj_max_open_files
+            break
+        endif
+        let cnt = cnt + 1
+        call winj#openGivenFile(abspath)
+    endfor
+    call s:errorNoFiles(cnt)
+endf
+
+fun! svnj#openListFiles(svnd, key)
+    if !has_key(a:svnd.selectd, a:key.':')
+        let a:svnd.selectd[a:key. ':'] = a:svnd.listd.contents[a:key].line
+    endif
+
+    let cnt = 0
+    for [thekey, filepath] in items(a:svnd.selectd)
+        let abspath = a:svnd.meta.filepath != "" ? 
+                    \ a:svnd.meta.filepath . "/". filepath : filepath
+        if cnt == g:svnj_max_open_files
+            break
+        endif
+        let cnt = cnt + 1
+        call winj#openGivenFile(abspath)
+    endfor
+    call s:errorNoFiles(cnt)
+endf
+"2}}}
+
+"SVNCommits helpers {{{2
 fun! svnj#showCommitsHEAD(svnd, key)
     call s:showCommits(a:svnd, a:key, ':HEAD')
 endf
@@ -583,7 +674,9 @@ fun! s:showCommitsAcross(revisionA, revisionB, meta)
     call winj#populateJWindow(svnd)
     unlet! svnd
 endf
+"2}}}
 
+"SVN URL helpers {{{2
 fun! s:validateSVNURLInteractive(sysURL)
     if !svnj#validSVNURL(a:sysURL)
         echohl WarningMsg | echo 'Failed to construct svn url: '
@@ -615,29 +708,6 @@ fun! s:svnBranchName(bURL)
     return ''
 endf
 
-fun! svnj#listBranches(svnd, key)
-    let svnd = s:svnd.New(s:svnj_branch_url)
-    let svnd.meta = a:svnd.meta
-    let svncmd = 'svn ls --non-interactive ' . s:svnj_branch_url
-    try
-        let branches = s:execShellCmd(svncmd)
-    catch
-        let svnd = s:addErr(svnd, 'Failed ', v:exception)
-        call winj#populateJWindow(svnd)
-        return
-    endtry
-    let brancheslist = split(branches, '\n')
-    let currentbranchname = s:svnBranchName(svnd.meta.url)
-    for branch in brancheslist
-        if currentbranchname != branch
-            call svnd.addMenu(s:newMenuItem(branch,
-                        \ 'svnj#listFilesFrom',
-                        \  a:svnd.menud.contents[a:key].convert))
-        endif
-    endfor
-    call winj#populateJWindow(svnd)
-endf
-
 fun! s:svnWorkingRoot()
     if len(s:svnj_wcrp) == 0 || isdirectory(s:svnj_wcrp) == 0
         return s:svnWorkingCopyRootPath()
@@ -664,7 +734,9 @@ fun! s:svnWorkingCopyRootPath()
     endtry
     return getcwd()
 endf
+"2}}}
 
+"getMeta {{{2
 fun! s:getMeta(fileabspath)
     let url = s:svnURL(a:fileabspath)
     let metad = {}
@@ -674,12 +746,15 @@ fun! s:getMeta(fileabspath)
     let metad.workingrootdir=s:svnWorkingRoot()
     return metad
 endf
+"2}}}
 
+"flist functions findfiles, askUsr {{{2
 fun! s:findFile(pURL, tfile)
     let shellist = []
     try
         let fname = fnamemodify(a:tfile, ":t")
         let svncmd = 'svn list -R --non-interactive ' . a:pURL . ' | grep ' . fname
+        echohl Error | echo "" | echon "Please wait, Finding file  : " |  echohl None | echon fname
         let shellout = s:execShellCmd(svncmd)
         let shellist = split(shellout, '\n')
 
@@ -751,7 +826,9 @@ endf
 fun! svnj#flistSelected(qsvnd, key)
     let s:selectedFile = a:qsvnd.flistd.contents[a:key].line
 endf
+"2}}}
 
+"URLs translaters branch2branch, branch2trunk etc., {{{2
 fun! s:svnBranchURLFromTrunk(tURL, tbname)
     let bURL = s:svnj_branch_url . a:tbname
     let rbURL = substitute(a:tURL, s:svnj_trunk_url, bURL, '')
@@ -797,7 +874,9 @@ fun! s:svnTrunkURLFromBranchURL(bURL)
     endif
     return ''
 endf
+"2}}}
 
+"svnLogs {{{2
 fun! s:svnLogs(svnurl)
     let svncmd = 'svn log --non-interactive -l ' . g:svnj_max_logs . 
                 \ ' ' . a:svnurl
@@ -837,7 +916,9 @@ fun! s:svnLogs(svnurl)
     endtry
     return logentries
 endf
+"2}}}
 
+"back funs {{{2
 fun! s:svnRootVersion(workingcopydir)
     let svncmd = 'svn log --non-interactive -l 1 ' . 
                 \ a:workingcopydir . ' | grep ^r'
@@ -845,7 +926,9 @@ fun! s:svnRootVersion(workingcopydir)
     let revisionnum = s:strip(split(shellout, '|')[0])
     return revisionnum
 endf
+"2}}}
 
+"svn helpers {{{2
 fun! s:svnLastChangedRevision(svnurl)
     let lastChngdRev = ''
     try
@@ -879,34 +962,9 @@ fun! svnj#validSVNURL(svnurl)
     endtry
     return 1
 endf
+"2}}}
 
-fun! s:getBufferFileAbsPath()
-    let fileabspath = expand('%:p')
-    if fileabspath ==# ''
-        throw 'Error No file in buffer'
-    endif
-    return fileabspath
-endf
-
-fun! s:addErr(svnd, descr, msg)
-    let a:svnd.error = {}
-    "let a:svnd.error.descr = a:descr
-    "let a:svnd.error.msg = a:msg
-    let a:svnd.error.line = s:errstart.a:descr . ' | ' . a:msg
-    return a:svnd
-endf
-
-fun! s:addToTitle(svnd, msg, prefix)
-    try
-        if a:prefix == 1
-            let a:svnd.title = a:msg. ' '. a:svnd.title
-        else
-            let a:svnd.title = a:svnd.title. ' ' . a:msg
-        endif
-    catch
-    endtry
-endf
-
+"menu helpers {{{2
 "convert = branch2trunk | branch2branch | trunk2branch
 fun! s:newMenuItem(title, callback, convert)
     let menu_item = {}
@@ -944,6 +1002,98 @@ fun! s:addMenusForUrl(svnd, url)
     return svnd
 endf
 
+fun! svnj#listFilesFrom(svnd, key)
+    let svnd = s:svnd.New('SVNLog', {s:logkey : deepcopy(s:entryd)})
+    let svnd.meta = a:svnd.meta
+    let fileurl = ''
+    try
+        let contents = a:svnd.menud.contents[a:key]
+        if contents.convert ==# 'branch2branch'
+            let fileurl = s:svnBranchURLFromBranch(a:svnd.meta.url, contents.title)
+        elseif contents.convert ==# 'branch2trunk'
+            let fileurl = s:svnTrunkURLFromBranchURL(a:svnd.meta.url)
+        elseif contents.convert ==# 'trunk2branch'
+            let fileurl = s:svnBranchURLFromTrunk(a:svnd.meta.url, contents.title)
+        endif
+
+        let fileurl = s:validateSVNURLInteractive(fileurl)
+        let svnd.meta.url = fileurl
+        let svnd.title = fileurl
+        call svnd.addContents(s:logkey, s:svnLogs(svnd.meta.url), s:logops)
+    catch
+        echo v:exception
+        let svnd = s:addErr(svnd, 'Failed to construct svn url',
+                    \ ' OR File does not exist' )
+    endtry
+    call winj#populateJWindow(svnd)
+    unlet! svnd
+endf
+
+fun! svnj#listBranches(svnd, key)
+    let svnd = s:svnd.New(s:svnj_branch_url)
+    let svnd.meta = a:svnd.meta
+    let svncmd = 'svn ls --non-interactive ' . s:svnj_branch_url
+    try
+        let branches = s:execShellCmd(svncmd)
+    catch
+        let svnd = s:addErr(svnd, 'Failed ', v:exception)
+        call winj#populateJWindow(svnd)
+        return
+    endtry
+    let brancheslist = split(branches, '\n')
+    let currentbranchname = s:svnBranchName(svnd.meta.url)
+    for branch in brancheslist
+        if currentbranchname != branch
+            call svnd.addMenu(s:newMenuItem(branch,
+                        \ 'svnj#listFilesFrom',
+                        \  a:svnd.menud.contents[a:key].convert))
+        endif
+    endfor
+    call winj#populateJWindow(svnd)
+endf
+"2}}}
+
+"Util funs {{{2
+fun! s:getBufferFileAbsPath()
+    let fileabspath = expand('%:p')
+    if fileabspath ==# ''
+        throw 'Error No file in buffer'
+    endif
+    return fileabspath
+endf
+
+fun! s:addErr(svnd, descr, msg)
+    let a:svnd.error = {}
+    "let a:svnd.error.descr = a:descr
+    "let a:svnd.error.msg = a:msg
+    let a:svnd.error.line = s:errstart.a:descr . ' | ' . a:msg
+    return a:svnd
+endf
+
+fun! s:addToTitle(svnd, msg, prefix)
+    try
+        if a:prefix == 1
+            let a:svnd.title = a:msg. ' '. a:svnd.title
+        else
+            let a:svnd.title = a:svnd.title. ' ' . a:msg
+        endif
+    catch
+    endtry
+endf
+
+fun! s:errorNoFiles(cnt)
+    if a:cnt == 0 
+        let svnd = s:addErr(s:svnd.New('Failed'), "No files to open", "")
+        call winj#populateJWindow(svnd)
+        unlet! svnd
+    endif
+endf
+
+fun! svnj#toggleWrap(svnd, key)
+    setl wrap!
+    return 2
+endf
+
 fun! s:sortConvInt(i1, i2)
     return a:i1 - a:i2
 endf
@@ -959,3 +1109,6 @@ fun! s:execShellCmd(cmd)
     endif
     return shellout
 endf
+"2}}}
+
+"1}}}

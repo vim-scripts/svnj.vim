@@ -5,11 +5,16 @@
 " License:      Distributed under the same terms as Vim itself. See :help license.
 " =============================================================================
 
+"plugin/svnj.vim "{{{
+
+"init "{{{
 if ( exists('g:loaded_svnj') && g:loaded_svnj ) || v:version < 700 || &cp
 	fini
 en
 let g:loaded_svnj = 1
+"}}}
 
+"command mappings "{{{
 com! SVNCommits call svnj#SVNCommits()
 com! SVNLog     call svnj#SVNLog()
 com! SVNDiff    call svnj#SVNDiff()
@@ -17,8 +22,10 @@ com! SVNBlame   call svnj#SVNBlame()
 
 com! -n=? SVNStatus  call svnj#SVNStatus(<f-args>)
 com! -n=? -com=dir SVNList    call svnj#SVNList(<q-args>)
+com! -n=? -com=dir SVNListRec call svnj#SVNListRec(<q-args>)
+"}}}
 
-"---Leader Mappings
+"leader mappings "{{{
 if exists('g:svnj_allow_leader_mappings') && g:svnj_allow_leader_mappings == 1
     map <silent> <leader>b :SVNBlame<CR>
     map <silent> <leader>c :SVNCommits<CR>
@@ -29,5 +36,9 @@ if exists('g:svnj_allow_leader_mappings') && g:svnj_allow_leader_mappings == 1
     map <silent> <leader>sp :SVNStatus u py<CR>
     map <silent> <leader>l :SVNLog<CR>
     map <silent> <leader>L :SVNList<CR>
+    map <silent> <leader>Lr :SVNListRec<CR>
     map <silent> <leader>q :diffoff! <CR> :q<CR>
 endif
+"}}}
+
+"}}}
