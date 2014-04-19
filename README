@@ -90,7 +90,6 @@ Basic Usage:
     :SVNLog
     :SVNStatus
     :SVNCommits
-    :SVNList
     :help svn
 
 Please refer to wiki link for more options available or after install help svnj-options
