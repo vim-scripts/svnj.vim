@@ -15,10 +15,10 @@ screenshots  :
               http://i.imgur.com/GTBhjVT.png
 
 Supported OS
-MacOSX/Linux
+MacOSX/Linux/Windows
 
 Supported operations
-     svn log, status, diff, blame, list
+     svn log, status, diff, blame, list, info
 
 Features
 
@@ -47,6 +47,7 @@ Features
                - Diff the current file with the file in buffer
                - Mark for open/diff
                - Bookmark file for current session
+               - Display affected files 
 
      2. SVNLog
          Get the revisions of file in buffer. With the list of revisions from the output.
@@ -55,6 +56,7 @@ Features
           - list trunk
           - list branches
           - diff/open files across branches/trunk
+          - Affected files
 
       3. SVNStatus
           Get the output of svn st. With the listed files
@@ -73,6 +75,8 @@ Features
          Immediate diff the file in buffer with the previous revision
          For diff with selected revision use SVNLog
 
+      6. SVNClearCache
+          The cache / persistency is not enabled by default. please see help SVNClearCache for more info.
 
 Lists all branches or trunk
     Optional settings when available will provide menu's to navigate available branches/trunk
@@ -84,12 +88,14 @@ Lists all branches or trunk
 
 Basic Usage:
     Run from vim command line
-    :SVNBrowse
+    :SVNBrowse  ,   :SVNBrowseWorkingCopy ,  :SVNBrowseRepo, :SVNBrowseBookMarks , :SVNBrowseMyList
     :SVNBlame
     :SVNDiff
     :SVNLog
     :SVNStatus
     :SVNCommits
+    :SVNInfo
+    :SVNClearCache
     :help svn
 
 Please refer to wiki link for more options available or after install help svnj-options
